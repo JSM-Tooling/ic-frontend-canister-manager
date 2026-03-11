@@ -1,0 +1,12 @@
+{
+  "name": "ic-frontend-canister-manager",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "scripts": {
+    "build": "echo 'Skipping build step...'",
+    "deploy:test": "cd <MOTOKO_CRAFTING_TABLE_PATH> && npm run deploy:frontend1",
+    "deploy:prod": "dfx deploy <CANISTER_NAME> --ic"
+  }
+}

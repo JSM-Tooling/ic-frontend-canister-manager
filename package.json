@@ -12,6 +12,7 @@
     "dfx:convert-icp-to-cycles": "dfx cycles convert --ic --amount",
     "task:copy-files": "cp -r custom-domain-files/. dist/",
     "deploy:test": "cd <MOTOKO_CRAFTING_TABLE_PATH> && npm run deploy:frontend1",
-    "deploy:prod": "npm run task:copy-files && dfx deploy <CANISTER_NAME> --ic --no-wallet"
+    "deploy:prod": "dfx deploy <CANISTER_NAME> --ic --no-wallet",
+    "deploy:prod-with-custom-domain": "npm run task:copy-files && dfx deploy <CANISTER_NAME>  --ic --no-wallet"
   }
 }

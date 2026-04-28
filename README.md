@@ -11,7 +11,7 @@ This project requires replacing placeholder values with environment-specific con
 
 ---
 
-## 1. `package.json` Configuration
+## 1a. `package.json` Configuration
 
 Update the following placeholders in the `package.json` file:
 
@@ -26,6 +26,17 @@ Update the following placeholders in the `package.json` file:
 ```json
 "deploy:test": "cd ./path-to-your-motoko-project && npm run deploy:frontend1",
 "deploy:prod": "npm run task:copy-files && dfx deploy your_canister_name --ic"
+```
+
+---
+
+## 1b `package.json` Configuration in your web project
+
+Add this two scripts in your web project (pay attention to folder hierarchy):
+
+```json
+"prod:copy": "rm -rf ../ic-frontend-canister-manager/dist && cp -r dist ../ic-frontend-canister-manager/dist",
+"prod:deploy": "npm run build && npm run prod:copy && cd ../ic-frontend-canister-manager && npm run deploy:prod"
 ```
 
 ---

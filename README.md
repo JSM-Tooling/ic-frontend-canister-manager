@@ -3,6 +3,10 @@ This project provides a streamlined workflow for deploying frontend assets to th
 
 ## Configuration Guide
 
+* Clone this project
+* Create branch for your web project
+* Follow below instructions:
+
 This project requires replacing placeholder values with environment-specific configuration before deployment. Follow the instructions below carefully.
 
 ---

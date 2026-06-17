@@ -4,6 +4,7 @@ This project provides a streamlined workflow for deploying frontend assets to th
 ## Configuration Guide
 
 * Clone this project
+* change the folder name by adding suffix with your project name i.e. "my-project-web"
 * Create branch for your web project
 * Follow below instructions:
 
@@ -14,6 +15,8 @@ This project requires replacing placeholder values with environment-specific con
 ## 1a. `package.json` Configuration
 
 Update the following placeholders in the `package.json` file:
+
+* replace "ic-frontend-canister-manager" with "ic-frontend-canister-manager" + your project name i.e.: ic-frontend-canister-manager-my-project-web
 
 * `<MOTOKO_CRAFTING_TABLE_PATH>`
   Replace with the absolute or relative path to your Motoko project directory that contains the deployment scripts.

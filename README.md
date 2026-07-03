@@ -57,6 +57,8 @@ Update the domain placeholder:
 * `www.<YOUR-DOMAIN>.com`
   Replace `<YOUR-DOMAIN>` with your actual domain name.
 
+For the full custom-domain walkthrough — DNS records, apex vs. subdomain, IC registration API, verification — see **[DOMAIN_SETUP.md](./DOMAIN_SETUP.md)**.
+
 ---
 
 ## 3. Notes

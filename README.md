@@ -30,10 +30,16 @@ Update the following placeholders in the `package.json` file:
 "deploy:test": "cd ./path-to-your-motoko-project && npm run deploy:frontend1",
 "deploy:prod": "npm run task:copy-files && dfx deploy your_canister_name --ic"
 ```
+---
+
+## 1b. `canister_ids.json` and `dfx.json` Configuration
+
+If you have already canister id, then use it in canister_ids.json file. If not - delete the file
+Replace <CANISTER_NAME> with the name of your canister in dfx.json
 
 ---
 
-## 1b `package.json` Configuration in your web project
+## 1c `package.json` Configuration in your web project
 
 Add this two scripts in your web project (pay attention to folder hierarchy):
 

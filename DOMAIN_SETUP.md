@@ -135,7 +135,82 @@ echo | openssl s_client -connect www.<YOUR-DOMAIN>:443 -servername www.<YOUR-DOM
 
 ---
 
-## 6. Reference
+## 6. Sharing an Internet Identity principal across multiple domains
+
+By default, Internet Identity derives a **different principal per origin/hostname** — a user logging into `https://a.<YOUR-DOMAIN>` gets a different principal than on `https://b.<YOUR-DOMAIN>`, even with the same passkey. If you run the same user base across multiple custom domains (e.g. two frontend canisters that should share one identity), you need the **alternative origins** mechanism.
+
+This is purely origin-based — it works across two completely different canisters, not just two domains on the same canister, since principal derivation only depends on the hostname string used, never on which canister happens to serve the assets at that hostname.
+
+### 6.1 Pick a canonical origin
+
+Choose one domain as canonical (the one whose principal gets reused everywhere). Every other domain is an "alternate."
+
+### 6.2 Host the alternate-origins file — on the canonical domain only
+
+```
+/.well-known/ii-alternative-origins
+```
+
+```json
+{
+  "alternativeOrigins": ["https://alternate.<YOUR-DOMAIN>"]
+}
+```
+
+- Max **10** alternative origins.
+- Full `https://` URLs, no trailing slash, no path.
+- Add matching `.ic-assets.json5` rules so it's served with the right content type and is fetchable cross-origin (the II frontend fetches this file via browser `fetch()` from its own origin):
+
+```json5
+[
+  { "match": ".well-known", "ignore": false },
+  {
+    "match": ".well-known/ii-alternative-origins",
+    "headers": {
+      "Access-Control-Allow-Origin": "*",
+      "Content-Type": "application/json"
+    },
+    "ignore": false
+  },
+  { "match": "**/*", "security_policy": "standard" }
+]
+```
+
+Deploy the canonical domain's canister, then verify:
+
+```bash
+curl -sI https://<CANONICAL_DOMAIN>/.well-known/ii-alternative-origins
+# expect: content-type: application/json, access-control-allow-origin: *
+```
+
+### 6.3 Pass `derivationOrigin` — only in the alternate domain's frontend code
+
+In the app that's served on the **alternate** domain (not the canonical one), pass `derivationOrigin` pointing at the canonical origin when calling `AuthClient.login()`:
+
+```ts
+const CANONICAL_ORIGIN = 'https://<CANONICAL_DOMAIN>';
+const ALTERNATE_HOSTNAMES = ['<alternate-domain>'];
+
+function getDerivationOrigin() {
+  return ALTERNATE_HOSTNAMES.includes(window.location.hostname) ? CANONICAL_ORIGIN : undefined;
+}
+
+client.login({
+  identityProvider: II_URL,
+  derivationOrigin: getDerivationOrigin(),
+  // ...
+});
+```
+
+Gate it on `window.location.hostname` like this rather than hardcoding it unconditionally — otherwise local dev (`localhost`) and any other deploy of the same codebase would also try to derive against the canonical origin and fail, since the canonical's `ii-alternative-origins` file won't list `localhost` as an alternate. The canonical domain's own deploy needs no `derivationOrigin` at all.
+
+### 6.4 Verify
+
+Log in from the alternate domain, then from the canonical domain, and confirm both produce the same principal (e.g. print `identity.getPrincipal().toText()` in your app, or compare whatever your backend sees as `caller`).
+
+---
+
+## 7. Reference
 
 Official docs: https://docs.internetcomputer.org/guides/frontends/custom-domains/
 

@@ -1,11 +1,16 @@
 # IC Frontend Canister Manager
+
+This tool is for central management of production deploys of frontend applications. It's a starting point for further customization depending on your project's needs. The minimal configuration handles a single production canister, but for larger projects it can be turned into a full-blown deploy combine, covering multiple environments.
+
+As a rule, deploys to test canisters should go through the `motoko-crafting-table` project. Nothing stops the frontend manager from also managing scripts for deploys to dedicated test canisters, though — motoko-crafting-table keeps reusing the same shared canisters, whereas here you can define your own project-specific test canisters.
+
 This project provides a streamlined workflow for deploying frontend assets to the Internet Computer (IC) while ensuring that custom domain configurations and SSL certificates remain valid during the deployment process.
 
 ## Configuration Guide
 
-* Fork this project
-* name the fork using the pattern "aaa-<your-project-name>-frontend-manager", e.g. "aaa-nazwa-projektu-frontend-manager"
-* Create branch for your web project
+* Create a new git repository named "aaa-<your-project-name>-frontend-manager", e.g. "aaa-nazwa-projektu-frontend-manager"
+* Clone it locally
+* Download this `ic-frontend-canister-manager` project as a zip from GitHub and unpack it, or clone it separately, then copy its contents into the repo you just created
 * Follow below instructions:
 
 This project requires replacing placeholder values with environment-specific configuration before deployment. Follow the instructions below carefully.
@@ -16,10 +21,7 @@ This project requires replacing placeholder values with environment-specific con
 
 Update the following placeholders in the `package.json` file:
 
-* replace "ic-frontend-canister-manager" with your fork's name following the pattern "aaa-<your-project-name>-frontend-manager" i.e.: aaa-nazwa-projektu-frontend-manager
-
-* `<MOTOKO_CRAFTING_TABLE_PATH>`
-  Replace with the absolute or relative path to your Motoko project directory that contains the deployment scripts.
+* replace "ic-frontend-canister-manager" with your repo's name following the pattern "aaa-<your-project-name>-frontend-manager" i.e.: aaa-nazwa-projektu-frontend-manager
 
 * `<CANISTER_NAME>`
   Replace with the exact name of the canister you intend to deploy.
@@ -27,25 +29,25 @@ Update the following placeholders in the `package.json` file:
 ### Example
 
 ```json
-"deploy:test": "cd ./path-to-your-motoko-project && npm run deploy:frontend1",
 "deploy:prod": "npm run task:copy-files && dfx deploy your_canister_name --ic"
 ```
 ---
 
 ## 1b. `canister_ids.json` and `dfx.json` Configuration
 
-If you have already canister id, then use it in canister_ids.json file. If not - delete the file
-Replace <CANISTER_NAME> with the name of your canister in dfx.json
+* If your project doesn't have a canister created yet, delete `canister_ids.json`.
+* If your project already has a canister — or you plan to reuse an existing one — keep `canister_ids.json` and replace `<CANISTER_ID>` with that canister's id.
+* In both `canister_ids.json` (if kept) and `dfx.json`, replace `<CANISTER_NAME>` with the name of your canister.
 
 ---
 
 ## 1c `package.json` Configuration in your web project
 
-Add this two scripts in your web project (pay attention to folder hierarchy):
+Add this two scripts in your web project (pay attention to folder hierarchy and don't forget to replace <aaa-project-name> with your actual folder name):
 
 ```json
-"prod:copy": "rm -rf ../ic-frontend-canister-manager/dist && cp -r dist ../ic-frontend-canister-manager/dist",
-"prod:deploy": "npm run build && npm run prod:copy && cd ../ic-frontend-canister-manager && npm run deploy:prod"
+"prod:copy": "rm -rf ../<aaa-project-name>/dist && cp -r dist ../<aaa-project-name>/dist",
+"prod:deploy": "npm run build && npm run prod:copy && cd ../<aaa-project-name> && npm run deploy:prod"
 ```
 
 ---
@@ -70,11 +72,6 @@ For the full custom-domain walkthrough — DNS records, apex vs. subdomain, IC r
 ---
 
 ## 4. Deployment Commands
-
-* Test deployment:
-  ```
-  npm run deploy:test
-  ```
 
 * Production deployment:
   ```

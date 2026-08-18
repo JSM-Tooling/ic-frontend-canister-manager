@@ -87,6 +87,20 @@ A `CNAME` record cannot exist on the bare apex (`<YOUR-DOMAIN>` with no subdomai
 
 **If you're on home.pl and don't want to migrate DNS elsewhere:** the pragmatic default is to only serve the app on the `www` subdomain and accept that the bare apex won't resolve to your app (it'll show the registrar's default parking page instead). This is a cosmetic/branding tradeoff, not a functional one — decide based on whether you need the bare domain to work.
 
+### 3.1 Apex via Cloudflare (concrete recipe)
+
+If you migrate DNS to Cloudflare specifically to unlock the apex, the records mirror the `www` table in [§2](#2-dns-records) but sit at the bare apex — Cloudflare's CNAME flattening lets a CNAME-shaped record live at the zone root:
+
+| Type  | Host               | Value                                      |
+|-------|--------------------|---------------------------------------------|
+| CNAME | `@` (apex)         | `<YOUR-DOMAIN>.icp1.io`                     |
+| TXT   | `_canister-id`     | `<CANISTER_ID>`                              |
+| CNAME | `_acme-challenge`  | `_acme-challenge.<YOUR-DOMAIN>.icp2.io`     |
+
+- Set the apex CNAME to **DNS only** (grey cloud), not proxied — Cloudflare's orange-cloud CDN proxy breaks IC's own TLS/ACME validation.
+- Only the nameservers move to Cloudflare; the registrar (GoDaddy, home.pl, ...) stays as-is.
+- Old A records at the previous DNS provider can stay cached at resolvers for up to their TTL (~1h) even after the authoritative NS have switched — a browser may still show the old registrar's parking page ("Launching Soon") during that window. Not a misconfiguration; re-check with `dig` against the new authoritative NS, and re-test in the browser after the TTL passes.
+
 ---
 
 ## 4. Register the domain with IC
@@ -210,7 +224,25 @@ Log in from the alternate domain, then from the canonical domain, and confirm bo
 
 ---
 
-## 7. Reference
+## 7. Troubleshooting: failed registration leaves an orphaned ACME challenge
+
+If a `POST` registration attempt fails (`registration_status` comes back `failed`), the IC side can be left holding a stale ACME TXT challenge record at `_acme-challenge.<YOUR-DOMAIN>.icp2.io`. Since your DNS `_acme-challenge` CNAME points at that record, this blocks **both** directions of retrying:
+
+- Re-`POST` refuses: `"existing DNS TXT challenge record at _acme-challenge.<YOUR-DOMAIN>"`.
+- `DELETE` refuses too: `"existing DNS TXT _canister-id record"` — IC requires removing the TXT record from DNS as proof of intent before it will delete the registration.
+
+Cleanup sequence (wait out DNS TTL, typically a few minutes, between each DNS change and the next API call):
+
+1. In DNS, temporarily remove the `_canister-id` TXT record. Leave the CNAMEs alone.
+2. `DELETE https://icp0.io/custom-domains/v1/<YOUR-DOMAIN>` — clears the registration state, including the orphaned challenge.
+3. Add the `_canister-id` TXT record back with its original value.
+4. `POST https://icp0.io/custom-domains/v1/<YOUR-DOMAIN>` to re-register.
+
+`icp0.io` and `icp.net` both serve the same `custom-domains/v1` API; either works.
+
+---
+
+## 8. Reference
 
 Official docs: https://docs.internetcomputer.org/guides/frontends/custom-domains/
 

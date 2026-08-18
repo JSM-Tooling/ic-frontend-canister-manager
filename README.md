@@ -89,3 +89,97 @@ Before proceeding, verify that:
 * Domain configuration matches your intended production setup.
 
 Failure to properly configure these values may prevent successful deployment.
+
+---
+
+## 6. Managing Multiple Projects From One Manager
+
+The minimal setup above assumes one canister, one `dist/`, one
+`custom-domain-files/`. When several independent frontend projects should
+share a single deploy manager (e.g. a family of related sites for the same
+client), namespace everything by a short project slug instead of running
+one manager per project. Concrete working example:
+`aaa-gulf-frontend-manager`, which manages two unrelated sites
+(`gulf-enterprise-solutions` and `gulfbusinesssupport`) from one repo.
+
+### 6a. Per-project directories, not shared ones
+
+* `dist/` → `dist-<project-slug>/`, one per project.
+* `custom-domain-files/` → `<project-slug>-custom-domain-files/`, one per
+  project, each with its own `.ic-assets.json5` and
+  `.well-known/ic-domains`.
+
+### 6b. `dfx.json` / `canister_ids.json` — one canister entry per project
+
+```json
+{
+  "canisters": {
+    "<project_a>_frontend": {
+      "frontend": { "entrypoint": "dist-<project-a-slug>/index.html" },
+      "source": ["dist-<project-a-slug>"],
+      "type": "assets"
+    },
+    "<project_b>_frontend": {
+      "frontend": { "entrypoint": "dist-<project-b-slug>/index.html" },
+      "source": ["dist-<project-b-slug>"],
+      "type": "assets"
+    }
+  },
+  "version": 1
+}
+```
+
+```json
+{
+  "<project_a>_frontend": { "ic": "<CANISTER_ID_A>" },
+  "<project_b>_frontend": { "ic": "<CANISTER_ID_B>" }
+}
+```
+
+### 6c. `package.json` — namespace every script by project slug
+
+```json
+"scripts": {
+  "<project-a-slug>:task:copy-files": "cp -r <project-a-slug>-custom-domain-files/. dist-<project-a-slug>/",
+  "<project-a-slug>:deploy:prod": "npm run <project-a-slug>:task:copy-files && dfx deploy <project_a>_frontend --ic",
+
+  "<project-b-slug>:task:copy-files": "cp -r <project-b-slug>-custom-domain-files/. dist-<project-b-slug>/",
+  "<project-b-slug>:deploy:prod": "npm run <project-b-slug>:task:copy-files && dfx deploy <project_b>_frontend --ic"
+}
+```
+
+There's no single unqualified `deploy:prod` anymore — every command names
+the project it acts on, so a deploy can never accidentally target the
+wrong site.
+
+### 6d. Each web project's own `package.json` still points at its own dist
+
+Same pattern as [§1c](#1c-packagejson-configuration-in-your-web-project),
+just pointed at the project-specific folder inside the manager:
+
+```json
+"prod:copy": "rm -rf ../aaa-<client>-frontend-manager/dist-<project-slug> && cp -r dist ../aaa-<client>-frontend-manager/dist-<project-slug>",
+"prod:deploy": "npm run build && npm run prod:copy && cd ../aaa-<client>-frontend-manager && npm run <project-slug>:deploy:prod"
+```
+
+### 6e. Adding a new project to an existing multi-project manager
+
+1. Create `dist-<new-slug>/` (or let the web project's `prod:copy` create it).
+2. Create `<new-slug>-custom-domain-files/` with `.ic-assets.json5` +
+   `.well-known/ic-domains` (copy an existing project's, then replace the
+   domain — see [DOMAIN_SETUP.md](./DOMAIN_SETUP.md)).
+3. Add the new canister to `dfx.json` (and `canister_ids.json` once it
+   exists on mainnet).
+4. Add the `<new-slug>:task:copy-files` / `<new-slug>:deploy:prod` script
+   pair to `package.json`.
+5. First `<new-slug>:deploy:prod` run creates the canister on mainnet if it
+   doesn't already exist in `canister_ids.json` — this costs cycles.
+
+### 6f. Custom domains stay per-project
+
+Everything in [DOMAIN_SETUP.md](./DOMAIN_SETUP.md) applies unchanged per
+project — just substitute the project's own `<project-slug>-custom-domain-files/`
+directory and canister for the generic `custom-domain-files/` paths used
+there. Each project registers its own domain independently through the
+same `custom-domains/v1` API; nothing is shared between projects except
+this one repo and its `dfx.json`/`package.json`.

@@ -1,17 +1,18 @@
 {
-  "name": "ic-frontend-canister-manager",
-  "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
-  "scripts": {
-    "build": "echo 'Skipping build step...'",
-    "dfx:icp-wallet-address": "dfx ledger account-id",
-    "dfx:icp-balance": "dfx ledger balance --ic",
-    "dfx:cycles-balance": "dfx cycles balance --ic",
-    "dfx:convert-icp-to-cycles": "dfx cycles convert --ic --amount",
-    "task:copy-files": "cp -r custom-domain-files/. dist/",
-    "deploy:prod": "dfx deploy <CANISTER_NAME> --ic --no-wallet",
-    "deploy:prod-with-custom-domain": "npm run task:copy-files && dfx deploy <CANISTER_NAME>  --ic --no-wallet"
-  }
+    "name": "ic-frontend-canister-manager",
+    "version": "1.0.0",
+    "description": "",
+    "license": "ISC",
+    "author": "",
+    "scripts": {
+        "build": "echo 'Skipping build step...'",
+        "dfx:icp-wallet-address": "dfx ledger account-id",
+        "dfx:icp-balance": "dfx ledger balance --ic",
+        "dfx:cycles-balance": "dfx cycles balance --ic",
+        "dfx:convert-icp-to-cycles": "dfx cycles convert --ic --amount",
+        "task:copy-to-crafting-table": "scripts/copy-to-crafting-table.sh",
+        "deploy:test": "f() { npm run task:copy-to-crafting-table -- $1 && cd ~/motoko-crafting-table && npm run deploy:$1; }; f",
+        "task:copy-files": "cp -r custom-domain-files/. dist/",
+        "deploy:prod": "npm run task:copy-files && dfx deploy <CANISTER_NAME> --ic"
+    }
 }

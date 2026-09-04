@@ -31,6 +31,22 @@ Update the following placeholders in the `package.json` file:
 ```json
 "deploy:prod": "npm run task:copy-files && dfx deploy your_canister_name --ic"
 ```
+
+### What the scripts do
+
+`./dist` is the staging area: the web project copies its build there (see
+[§1c](#1c-packagejson-configuration-in-your-web-project)), and the manager
+decides where it goes.
+
+* `deploy:test -- <slot>` — copies `./dist` into
+  `~/motoko-crafting-table/<slot>` (replacing the slot) and runs that
+  slot's deploy in the crafting table. The slot is required — the web
+  project's `craft:deploy` supplies it — and it must be an `assets`
+  canister in the crafting table's `dfx.json`, otherwise
+  `scripts/copy-to-crafting-table.sh` stops before deleting anything.
+  Requires `motoko-crafting-table` cloned at `~/motoko-crafting-table`.
+* `deploy:prod` — adds the custom-domain files to `./dist` and deploys the
+  production canister.
 ---
 
 ## 1b. `canister_ids.json` and `dfx.json` Configuration
@@ -43,12 +59,22 @@ Update the following placeholders in the `package.json` file:
 
 ## 1c `package.json` Configuration in your web project
 
-Add this two scripts in your web project (pay attention to folder hierarchy and don't forget to replace <aaa-project-name> with your actual folder name):
+Add these three scripts in your web project (pay attention to folder hierarchy and don't forget to replace <aaa-project-name> with your actual folder name):
 
 ```json
-"prod:copy": "rm -rf ../<aaa-project-name>/dist && cp -r dist ../<aaa-project-name>/dist",
-"prod:deploy": "npm run build && npm run prod:copy && cd ../<aaa-project-name> && npm run deploy:prod"
+"copy": "rm -rf ../<aaa-project-name>/dist && cp -r dist ../<aaa-project-name>/dist",
+"craft:deploy": "f() { S=${1:-frontend3}; npm run build && npm run copy && cd ../<aaa-project-name> && npm run deploy:test -- $S; }; f",
+"prod:deploy": "npm run build && npm run copy && cd ../<aaa-project-name> && npm run deploy:prod"
 ```
+
+* `copy` — the only place the web project touches the manager: it replaces
+  the manager's `./dist` with the fresh build.
+* `craft:deploy` — test deploy through the crafting table. The default slot
+  (`frontend3` above) is the project's choice — this is the one place the
+  default lives; `npm run craft:deploy -- frontend2` overrides it. The
+  slots are shared between projects, so check what a slot holds before you
+  take it (`~/motoko-crafting-table/<slot>/index.html`).
+* `prod:deploy` — production deploy through the manager's `deploy:prod`.
 
 ---
 
@@ -73,10 +99,22 @@ For the full custom-domain walkthrough — DNS records, apex vs. subdomain, IC r
 
 ## 4. Deployment Commands
 
+Run from the web project:
+
+* Test deployment (crafting-table slot from `craft:deploy`, or the one given):
+  ```
+  npm run craft:deploy
+  npm run craft:deploy -- frontend2
+  ```
 * Production deployment:
   ```
-  npm run deploy:prod
+  npm run prod:deploy
   ```
+
+Run from the manager (after the web project's `npm run copy`):
+
+* `npm run deploy:test -- frontend3`
+* `npm run deploy:prod`
 
 ---
 
@@ -104,7 +142,10 @@ one manager per project. Concrete working example:
 
 ### 6a. Per-project directories, not shared ones
 
-* `dist/` → `dist-<project-slug>/`, one per project.
+* `dist/` stays the shared staging area every web project's `copy` writes
+  into; each project's production source is `dist-<project-slug>/`, filled
+  from `dist/` by `<project-slug>:task:copy-dist`. Add each
+  `dist-<project-slug>` to `.gitignore`.
 * `custom-domain-files/` → `<project-slug>-custom-domain-files/`, one per
   project, each with its own `.ic-assets.json5` and
   `.well-known/ic-domains`.
@@ -140,38 +181,52 @@ one manager per project. Concrete working example:
 
 ```json
 "scripts": {
-  "<project-a-slug>:task:copy-files": "cp -r <project-a-slug>-custom-domain-files/. dist-<project-a-slug>/",
-  "<project-a-slug>:deploy:prod": "npm run <project-a-slug>:task:copy-files && dfx deploy <project_a>_frontend --ic",
+  "task:copy-to-crafting-table": "scripts/copy-to-crafting-table.sh",
+  "deploy:test": "f() { npm run task:copy-to-crafting-table -- $1 && cd ~/motoko-crafting-table && npm run deploy:$1; }; f",
 
+  "<project-a-slug>:task:copy-dist": "rm -rf dist-<project-a-slug> && cp -r dist dist-<project-a-slug>",
+  "<project-a-slug>:task:copy-files": "cp -r <project-a-slug>-custom-domain-files/. dist-<project-a-slug>/",
+  "<project-a-slug>:deploy:prod": "npm run <project-a-slug>:task:copy-dist && npm run <project-a-slug>:task:copy-files && dfx deploy <project_a>_frontend --ic",
+
+  "<project-b-slug>:task:copy-dist": "rm -rf dist-<project-b-slug> && cp -r dist dist-<project-b-slug>",
   "<project-b-slug>:task:copy-files": "cp -r <project-b-slug>-custom-domain-files/. dist-<project-b-slug>/",
-  "<project-b-slug>:deploy:prod": "npm run <project-b-slug>:task:copy-files && dfx deploy <project_b>_frontend --ic"
+  "<project-b-slug>:deploy:prod": "npm run <project-b-slug>:task:copy-dist && npm run <project-b-slug>:task:copy-files && dfx deploy <project_b>_frontend --ic"
 }
 ```
 
 There's no single unqualified `deploy:prod` anymore — every command names
 the project it acts on, so a deploy can never accidentally target the
-wrong site.
+wrong site. `deploy:test` stays unqualified: the crafting-table slots are
+shared between projects anyway, and the web project's `craft:deploy`
+passes the slot it uses.
 
-### 6d. Each web project's own `package.json` still points at its own dist
+### 6d. Each web project's own `package.json` stays almost the same
 
-Same pattern as [§1c](#1c-packagejson-configuration-in-your-web-project),
-just pointed at the project-specific folder inside the manager:
+Same `copy` and `craft:deploy` as in
+[§1c](#1c-packagejson-configuration-in-your-web-project) — a web project
+never touches `dist-<project-slug>`, it only stages into the manager's
+`dist/`. Only `prod:deploy` names the project:
 
 ```json
-"prod:copy": "rm -rf ../aaa-<client>-frontend-manager/dist-<project-slug> && cp -r dist ../aaa-<client>-frontend-manager/dist-<project-slug>",
-"prod:deploy": "npm run build && npm run prod:copy && cd ../aaa-<client>-frontend-manager && npm run <project-slug>:deploy:prod"
+"copy": "rm -rf ../aaa-<client>-frontend-manager/dist && cp -r dist ../aaa-<client>-frontend-manager/dist",
+"craft:deploy": "f() { S=${1:-frontend3}; npm run build && npm run copy && cd ../aaa-<client>-frontend-manager && npm run deploy:test -- $S; }; f",
+"prod:deploy": "npm run build && npm run copy && cd ../aaa-<client>-frontend-manager && npm run <project-slug>:deploy:prod"
 ```
+
+Working example: `aaa-gulf-frontend-manager` with `gulfbusinesssupport`
+and `gulf-enterprise-solutions-hub`.
 
 ### 6e. Adding a new project to an existing multi-project manager
 
-1. Create `dist-<new-slug>/` (or let the web project's `prod:copy` create it).
+1. Nothing to create by hand for the dist: `<new-slug>:task:copy-dist`
+   creates `dist-<new-slug>/` on the first deploy.
 2. Create `<new-slug>-custom-domain-files/` with `.ic-assets.json5` +
    `.well-known/ic-domains` (copy an existing project's, then replace the
    domain — see [DOMAIN_SETUP.md](./DOMAIN_SETUP.md)).
 3. Add the new canister to `dfx.json` (and `canister_ids.json` once it
    exists on mainnet).
-4. Add the `<new-slug>:task:copy-files` / `<new-slug>:deploy:prod` script
-   pair to `package.json`.
+4. Add the `<new-slug>:task:copy-dist` / `<new-slug>:task:copy-files` /
+   `<new-slug>:deploy:prod` scripts to `package.json`.
 5. First `<new-slug>:deploy:prod` run creates the canister on mainnet if it
    doesn't already exist in `canister_ids.json` — this costs cycles.
 

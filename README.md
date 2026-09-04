@@ -1,240 +1,195 @@
 # IC Frontend Canister Manager
 
-This tool is for central management of production deploys of frontend applications. It's a starting point for further customization depending on your project's needs. The minimal configuration handles a single production canister, but for larger projects it can be turned into a full-blown deploy combine, covering multiple environments.
+A template for the **deploy manager** of a client's websites on the Internet
+Computer. One manager repo (`aaa-<client>-frontend-manager`) holds everything a
+production deploy needs — `dfx.json`, canister ids, custom-domain files — for
+one or more frontend canisters, and gives a one-command test deploy through
+[`motoko-crafting-table`](https://github.com/JSM-Tooling/motoko-crafting-table).
 
-As a rule, deploys to test canisters should go through the `motoko-crafting-table` project. Nothing stops the frontend manager from also managing scripts for deploys to dedicated test canisters, though — motoko-crafting-table keeps reusing the same shared canisters, whereas here you can define your own project-specific test canisters.
+The web projects stay free of deploy details. Each one only knows how to build
+and how to copy its `dist` into the manager; the manager decides where the
+build goes.
 
-This project provides a streamlined workflow for deploying frontend assets to the Internet Computer (IC) while ensuring that custom domain configurations and SSL certificates remain valid during the deployment process.
-
-## Configuration Guide
-
-* Create a new git repository named "aaa-<your-project-name>-frontend-manager", e.g. "aaa-nazwa-projektu-frontend-manager"
-* Clone it locally
-* Download this `ic-frontend-canister-manager` project as a zip from GitHub and unpack it, or clone it separately, then copy its contents into the repo you just created
-* Follow below instructions:
-
-This project requires replacing placeholder values with environment-specific configuration before deployment. Follow the instructions below carefully.
-
----
-
-## 1a. `package.json` Configuration
-
-Update the following placeholders in the `package.json` file:
-
-* replace "ic-frontend-canister-manager" with your repo's name following the pattern "aaa-<your-project-name>-frontend-manager" i.e.: aaa-nazwa-projektu-frontend-manager
-
-* `<CANISTER_NAME>`
-  Replace with the exact name of the canister you intend to deploy.
-
-### Example
-
-```json
-"deploy:prod": "npm run task:copy-files && dfx deploy your_canister_name --ic"
+```
+web project                     manager                                        target
+───────────                     ───────                                        ──────
+npm run build ──▶ dist/ ──copy──▶ ./dist ──┬─ deploy:test -- <slot> ──▶ ~/motoko-crafting-table/<slot> ──▶ shared test canister
+                                           │                                                               (reinstall, .icp0.io URL)
+                                           └─ deploy:prod ──▶ ./dist + custom-domain files ──▶ dfx deploy --ic ──▶ production canister
 ```
 
-### What the scripts do
-
-`./dist` is the staging area: the web project copies its build there (see
-[§1c](#1c-packagejson-configuration-in-your-web-project)), and the manager
-decides where it goes.
-
-* `deploy:test -- <slot>` — copies `./dist` into
-  `~/motoko-crafting-table/<slot>` (replacing the slot) and runs that
-  slot's deploy in the crafting table. The slot is required — the web
-  project's `craft:deploy` supplies it — and it must be an `assets`
-  canister in the crafting table's `dfx.json`, otherwise
-  `scripts/copy-to-crafting-table.sh` stops before deleting anything.
-  Requires `motoko-crafting-table` cloned at `~/motoko-crafting-table`.
-* `deploy:prod` — adds the custom-domain files to `./dist` and deploys the
-  production canister.
----
-
-## 1b. `canister_ids.json` and `dfx.json` Configuration
-
-* If your project doesn't have a canister created yet, delete `canister_ids.json`.
-* If your project already has a canister — or you plan to reuse an existing one — keep `canister_ids.json` and replace `<CANISTER_ID>` with that canister's id.
-* In both `canister_ids.json` (if kept) and `dfx.json`, replace `<CANISTER_NAME>` with the name of your canister.
+For a manager that serves several sites the production side is namespaced
+per site — see [Several sites in one manager](#several-sites-in-one-manager).
+Everything else is the same.
 
 ---
 
-## 1c `package.json` Configuration in your web project
+## Quick start: a new site
 
-Add these three scripts in your web project (pay attention to folder hierarchy and don't forget to replace <aaa-project-name> with your actual folder name):
+**Prerequisites:** `dfx` installed, an identity with cycles for the production
+canister, `motoko-crafting-table` cloned at `~/motoko-crafting-table`, and a
+web project that builds into `dist/`.
+
+Is this the client's first site? Do steps A–E. Does the client already have a
+manager? Skip A and follow [Adding a site](#adding-a-site) instead.
+
+### A. Create the manager
+
+1. Create a GitHub repo named `aaa-<client>-frontend-manager` and clone it as
+   a **sibling of the web project** (the web project's scripts use
+   `../aaa-<client>-frontend-manager`).
+2. Copy the contents of this template into it (download the zip, or clone
+   and copy — without `.git`).
+3. Replace the placeholders:
+
+   | Placeholder | Where | Value |
+   |---|---|---|
+   | `ic-frontend-canister-manager` | `package.json` → `name` | the repo name, e.g. `aaa-acme-frontend-manager` |
+   | `<CANISTER_NAME>` | `package.json`, `dfx.json`, `canister_ids.json` | the canister name, e.g. `acme_frontend` |
+   | `<CANISTER_ID>` | `canister_ids.json` | the existing canister's id — or **delete the file** if the canister does not exist yet; the first `deploy:prod` creates it and writes the file |
+   | `www.<YOUR-DOMAIN>.com` | `custom-domain-files/.well-known/ic-domains` | the site's domain(s), one per line |
+
+4. Commit and push.
+
+### B. Wire the web project
+
+Add these three scripts to the web project's `package.json` (replace
+`<aaa-client-frontend-manager>` with the manager's folder name):
 
 ```json
-"copy": "rm -rf ../<aaa-project-name>/dist && cp -r dist ../<aaa-project-name>/dist",
-"craft:deploy": "f() { S=${1:-frontend3}; npm run build && npm run copy && cd ../<aaa-project-name> && npm run deploy:test -- $S; }; f",
-"prod:deploy": "npm run build && npm run copy && cd ../<aaa-project-name> && npm run deploy:prod"
+"copy": "rm -rf ../<aaa-client-frontend-manager>/dist && cp -r dist ../<aaa-client-frontend-manager>/dist",
+"craft:deploy": "f() { S=${1:-frontend3}; npm run build && npm run copy && cd ../<aaa-client-frontend-manager> && npm run deploy:test -- $S; }; f",
+"prod:deploy": "npm run build && npm run copy && cd ../<aaa-client-frontend-manager> && npm run deploy:prod"
 ```
 
-* `copy` — the only place the web project touches the manager: it replaces
+* `copy` is the only place the web project touches the manager: it replaces
   the manager's `./dist` with the fresh build.
-* `craft:deploy` — test deploy through the crafting table. The default slot
-  (`frontend3` above) is the project's choice — this is the one place the
-  default lives; `npm run craft:deploy -- frontend2` overrides it. The
-  slots are shared between projects, so check what a slot holds before you
-  take it (`~/motoko-crafting-table/<slot>/index.html`).
-* `prod:deploy` — production deploy through the manager's `deploy:prod`.
+* `craft:deploy` is the test deploy. `frontend3` is the site's **default
+  slot** in the crafting table — this is the one place the default lives.
+  `npm run craft:deploy -- frontend2` uses another slot for one run.
+* `prod:deploy` is the production deploy.
+
+### C. Test deploy
+
+```
+npm run craft:deploy
+```
+
+The build lands in `~/motoko-crafting-table/frontend3` and is deployed to that
+slot's canister — open `https://<slot canister id>.icp0.io` (ids are in
+`~/motoko-crafting-table/canister_ids.json`). The slots are **shared between
+all projects** and every deploy is a reinstall: check what a slot holds
+(`~/motoko-crafting-table/<slot>/index.html`) before you take it, and expect
+your build to be replaced by the next project. `frontend3` has no custom
+domain, it is served only from its `.icp0.io` URL.
+
+### D. First production deploy
+
+```
+npm run prod:deploy
+```
+
+Without `canister_ids.json` this creates the canister on mainnet (costs
+cycles — check `npm run dfx:cycles-balance` first) and writes the file:
+**commit it**. Later runs redeploy into the same canister.
+
+### E. Custom domain
+
+Point the domain at the canister: DNS records, IC registration, verification —
+all in [DOMAIN_SETUP.md](./DOMAIN_SETUP.md). The
+`custom-domain-files/` you filled in step A are what `deploy:prod` ships next
+to the build so the domain keeps working after every deploy.
 
 ---
 
-## 2. Domain Configuration (`ic-domains` file)
+## Scripts
 
-Update the domain placeholder:
+### In the manager
 
-* `www.<YOUR-DOMAIN>.com`
-  Replace `<YOUR-DOMAIN>` with your actual domain name.
+| Script | What it does |
+|---|---|
+| `deploy:test -- <slot>` | `scripts/copy-to-crafting-table.sh <slot>` (copies `./dist` into `~/motoko-crafting-table/<slot>`, replacing it), then `npm run deploy:<slot>` in the crafting table. The slot is required and must be an `assets` canister in the table's `dfx.json`, otherwise the script stops before deleting anything. |
+| `deploy:prod` | `task:copy-files` (custom-domain files into `./dist`), then `dfx deploy <CANISTER_NAME> --ic`. |
+| `task:copy-to-crafting-table -- <slot>` | the copy step of `deploy:test` alone. |
+| `task:copy-files` | the custom-domain copy step of `deploy:prod` alone. |
+| `dfx:icp-wallet-address`, `dfx:icp-balance`, `dfx:cycles-balance`, `dfx:convert-icp-to-cycles -- <amount>` | ledger and cycles helpers for the current `dfx` identity. |
 
-For the full custom-domain walkthrough — DNS records, apex vs. subdomain, IC registration API, verification — see **[DOMAIN_SETUP.md](./DOMAIN_SETUP.md)**.
+`./dist` is git-ignored: it is a staging area the web project overwrites on
+every deploy, never a source of truth.
 
----
+### In the web project
 
-## 3. Notes
-
-* Ensure all placeholders are replaced before running any deployment commands.
-* Incorrect or missing values may result in failed deployments or misconfigured environments.
-* The `deploy:prod` script assumes that required files are present in the `custom-domain-files` directory.
-
----
-
-## 4. Deployment Commands
-
-Run from the web project:
-
-* Test deployment (crafting-table slot from `craft:deploy`, or the one given):
-  ```
-  npm run craft:deploy
-  npm run craft:deploy -- frontend2
-  ```
-* Production deployment:
-  ```
-  npm run prod:deploy
-  ```
-
-Run from the manager (after the web project's `npm run copy`):
-
-* `npm run deploy:test -- frontend3`
-* `npm run deploy:prod`
+| Script | What it does |
+|---|---|
+| `copy` | replace the manager's `./dist` with this project's `dist`. |
+| `craft:deploy [-- <slot>]` | build, copy, manager `deploy:test -- <slot>`; default slot set in the script. |
+| `prod:deploy` | build, copy, manager `deploy:prod` (or `<slug>:deploy:prod` in a multi-site manager). |
 
 ---
 
-## 5. Summary
+## Several sites in one manager
 
-Before proceeding, verify that:
+When a client has more than one site, they share one manager instead of one
+repo each. The test side does not change (`deploy:test` and the crafting-table
+slots are shared anyway). The production side is namespaced by a short site
+slug, so a deploy can never target the wrong site:
 
-* All placeholders have been replaced with valid values.
-* Paths are correct and accessible.
-* Domain configuration matches your intended production setup.
-
-Failure to properly configure these values may prevent successful deployment.
-
----
-
-## 6. Managing Multiple Projects From One Manager
-
-The minimal setup above assumes one canister, one `dist/`, one
-`custom-domain-files/`. When several independent frontend projects should
-share a single deploy manager (e.g. a family of related sites for the same
-client), namespace everything by a short project slug instead of running
-one manager per project. Concrete working example:
-`aaa-gulf-frontend-manager`, which manages two unrelated sites
-(`gulf-enterprise-solutions` and `gulfbusinesssupport`) from one repo.
-
-### 6a. Per-project directories, not shared ones
-
-* `dist/` stays the shared staging area every web project's `copy` writes
-  into; each project's production source is `dist-<project-slug>/`, filled
-  from `dist/` by `<project-slug>:task:copy-dist`. Add each
-  `dist-<project-slug>` to `.gitignore`.
-* `custom-domain-files/` → `<project-slug>-custom-domain-files/`, one per
-  project, each with its own `.ic-assets.json5` and
+* `dist-<slug>/` — the site's production source, filled from `./dist` by
+  `<slug>:task:copy-dist`; add it to `.gitignore`.
+* `<slug>-custom-domain-files/` — the site's `.ic-assets.json5` and
   `.well-known/ic-domains`.
-
-### 6b. `dfx.json` / `canister_ids.json` — one canister entry per project
+* one canister per site in `dfx.json` and `canister_ids.json`.
+* three scripts per site in `package.json`.
 
 ```json
-{
-  "canisters": {
-    "<project_a>_frontend": {
-      "frontend": { "entrypoint": "dist-<project-a-slug>/index.html" },
-      "source": ["dist-<project-a-slug>"],
-      "type": "assets"
-    },
-    "<project_b>_frontend": {
-      "frontend": { "entrypoint": "dist-<project-b-slug>/index.html" },
-      "source": ["dist-<project-b-slug>"],
-      "type": "assets"
-    }
-  },
-  "version": 1
+"canisters": {
+  "<slug_a>_frontend": {
+    "frontend": { "entrypoint": "dist-<slug-a>/index.html" },
+    "source": ["dist-<slug-a>"],
+    "type": "assets"
+  }
 }
 ```
 
 ```json
-{
-  "<project_a>_frontend": { "ic": "<CANISTER_ID_A>" },
-  "<project_b>_frontend": { "ic": "<CANISTER_ID_B>" }
-}
+"<slug-a>:task:copy-dist": "rm -rf dist-<slug-a> && cp -r dist dist-<slug-a>",
+"<slug-a>:task:copy-files": "cp -r <slug-a>-custom-domain-files/. dist-<slug-a>/",
+"<slug-a>:deploy:prod": "npm run <slug-a>:task:copy-dist && npm run <slug-a>:task:copy-files && dfx deploy <slug_a>_frontend --ic"
 ```
 
-### 6c. `package.json` — namespace every script by project slug
+The web project's scripts are the ones from [step B](#b-wire-the-web-project);
+only `prod:deploy` ends with `npm run <slug-a>:deploy:prod`. A web project
+never touches `dist-<slug>`.
 
-```json
-"scripts": {
-  "task:copy-to-crafting-table": "scripts/copy-to-crafting-table.sh",
-  "deploy:test": "f() { npm run task:copy-to-crafting-table -- $1 && cd ~/motoko-crafting-table && npm run deploy:$1; }; f",
+Working example: [`aaa-gulf-frontend-manager`](https://github.com/JSM-Gulf/aaa-gulf-frontend-manager)
+— two unrelated sites, one manager.
 
-  "<project-a-slug>:task:copy-dist": "rm -rf dist-<project-a-slug> && cp -r dist dist-<project-a-slug>",
-  "<project-a-slug>:task:copy-files": "cp -r <project-a-slug>-custom-domain-files/. dist-<project-a-slug>/",
-  "<project-a-slug>:deploy:prod": "npm run <project-a-slug>:task:copy-dist && npm run <project-a-slug>:task:copy-files && dfx deploy <project_a>_frontend --ic",
+### Adding a site
 
-  "<project-b-slug>:task:copy-dist": "rm -rf dist-<project-b-slug> && cp -r dist dist-<project-b-slug>",
-  "<project-b-slug>:task:copy-files": "cp -r <project-b-slug>-custom-domain-files/. dist-<project-b-slug>/",
-  "<project-b-slug>:deploy:prod": "npm run <project-b-slug>:task:copy-dist && npm run <project-b-slug>:task:copy-files && dfx deploy <project_b>_frontend --ic"
-}
-```
+1. **Web project:** builds into `dist/`, lives next to the manager, gets the
+   three scripts from [step B](#b-wire-the-web-project) with
+   `prod:deploy` → `npm run <slug>:deploy:prod`. Pick its default slot.
+2. **Manager:** `<slug>-custom-domain-files/` (copy an existing site's, edit
+   `ic-domains`), the canister in `dfx.json`, the three `<slug>:*` scripts,
+   `dist-<slug>` in `.gitignore`. Commit.
+3. **Test:** `npm run craft:deploy` in the web project.
+4. **Production:** `npm run prod:deploy` in the web project — the first run
+   creates the canister (cycles) and adds it to `canister_ids.json`: commit.
+5. **Domain:** [DOMAIN_SETUP.md](./DOMAIN_SETUP.md) with the site's own
+   `<slug>-custom-domain-files/` and canister.
 
-There's no single unqualified `deploy:prod` anymore — every command names
-the project it acts on, so a deploy can never accidentally target the
-wrong site. `deploy:test` stays unqualified: the crafting-table slots are
-shared between projects anyway, and the web project's `craft:deploy`
-passes the slot it uses.
+Turning a single-site manager into a multi-site one is the same list applied
+to the existing site first: rename `custom-domain-files/` and the scripts to
+the slug form, switch `dfx.json` to `dist-<slug>`, and add
+`<slug>:task:copy-dist`.
 
-### 6d. Each web project's own `package.json` stays almost the same
+---
 
-Same `copy` and `craft:deploy` as in
-[§1c](#1c-packagejson-configuration-in-your-web-project) — a web project
-never touches `dist-<project-slug>`, it only stages into the manager's
-`dist/`. Only `prod:deploy` names the project:
+## Checklist before the first production deploy
 
-```json
-"copy": "rm -rf ../aaa-<client>-frontend-manager/dist && cp -r dist ../aaa-<client>-frontend-manager/dist",
-"craft:deploy": "f() { S=${1:-frontend3}; npm run build && npm run copy && cd ../aaa-<client>-frontend-manager && npm run deploy:test -- $S; }; f",
-"prod:deploy": "npm run build && npm run copy && cd ../aaa-<client>-frontend-manager && npm run <project-slug>:deploy:prod"
-```
-
-Working example: `aaa-gulf-frontend-manager` with `gulfbusinesssupport`
-and `gulf-enterprise-solutions-hub`.
-
-### 6e. Adding a new project to an existing multi-project manager
-
-1. Nothing to create by hand for the dist: `<new-slug>:task:copy-dist`
-   creates `dist-<new-slug>/` on the first deploy.
-2. Create `<new-slug>-custom-domain-files/` with `.ic-assets.json5` +
-   `.well-known/ic-domains` (copy an existing project's, then replace the
-   domain — see [DOMAIN_SETUP.md](./DOMAIN_SETUP.md)).
-3. Add the new canister to `dfx.json` (and `canister_ids.json` once it
-   exists on mainnet).
-4. Add the `<new-slug>:task:copy-dist` / `<new-slug>:task:copy-files` /
-   `<new-slug>:deploy:prod` scripts to `package.json`.
-5. First `<new-slug>:deploy:prod` run creates the canister on mainnet if it
-   doesn't already exist in `canister_ids.json` — this costs cycles.
-
-### 6f. Custom domains stay per-project
-
-Everything in [DOMAIN_SETUP.md](./DOMAIN_SETUP.md) applies unchanged per
-project — just substitute the project's own `<project-slug>-custom-domain-files/`
-directory and canister for the generic `custom-domain-files/` paths used
-there. Each project registers its own domain independently through the
-same `custom-domains/v1` API; nothing is shared between projects except
-this one repo and its `dfx.json`/`package.json`.
+* no `<…>` placeholder left in `package.json`, `dfx.json`,
+  `canister_ids.json` (or the file deleted), `ic-domains`;
+* the manager sits next to the web project and the web project's scripts
+  point at its folder name;
+* `npm run craft:deploy` works from the web project;
+* the `dfx` identity has cycles for a new canister (`npm run dfx:cycles-balance`).

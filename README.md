@@ -75,7 +75,7 @@ Add these three scripts to the web project's `package.json` (replace
 ### C. Test deploy
 
 ```
-npm run craft:deploy
+npm run craft:deploy -- <slot>
 ```
 
 The build lands in `~/motoko-crafting-table/<slot>` and is deployed to that
@@ -176,7 +176,7 @@ Working example: [`aaa-gulf-frontend-manager`](https://github.com/JSM-Gulf/aaa-g
 2. **Manager:** `<slug>-custom-domain-files/` (copy an existing site's, edit
    `ic-domains`), the canister in `dfx.json`, the three `<slug>:*` scripts,
    `dist-<slug>` in `.gitignore`. Commit.
-3. **Test:** `npm run craft:deploy` in the web project.
+3. **Test:** `npm run craft:deploy -- <slot>` in the web project.
 4. **Production:** `npm run prod:deploy` in the web project — the first run
    creates the canister (cycles) and adds it to `canister_ids.json`: commit.
 5. **Domain:** [DOMAIN_SETUP.md](./DOMAIN_SETUP.md) with the site's own
@@ -195,5 +195,5 @@ the slug form, switch `dfx.json` to `dist-<slug>`, and add
   `canister_ids.json` (or the file deleted), `ic-domains`;
 * the manager sits next to the web project and the web project's scripts
   point at its folder name;
-* `npm run craft:deploy` works from the web project;
+* `npm run craft:deploy -- <slot>` works from the web project;
 * the `dfx` identity has cycles for a new canister (`npm run dfx:cycles-balance`).

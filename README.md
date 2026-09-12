@@ -58,15 +58,18 @@ Add these three scripts to the web project's `package.json` (replace
 
 ```json
 "copy": "rm -rf ../<aaa-client-frontend-manager>/dist && cp -r dist ../<aaa-client-frontend-manager>/dist",
-"craft:deploy": "f() { S=${1:-frontend3}; npm run build && npm run copy && cd ../<aaa-client-frontend-manager> && npm run deploy:test -- $S; }; f",
+"craft:deploy": "f() { S=${1:?pass a crafting-table slot}; npm run build && npm run copy && cd ../<aaa-client-frontend-manager> && npm run deploy:test -- $S; }; f",
 "prod:deploy": "npm run build && npm run copy && cd ../<aaa-client-frontend-manager> && npm run deploy:prod"
 ```
 
 * `copy` is the only place the web project touches the manager: it replaces
   the manager's `./dist` with the fresh build.
-* `craft:deploy` is the test deploy. `frontend3` is the site's **default
-  slot** in the crafting table — this is the one place the default lives.
-  `npm run craft:deploy -- frontend2` uses another slot for one run.
+* `craft:deploy` is the test deploy. The slot is **required**: since
+  2026-09-11 `frontend1`–`frontend4` in the crafting table all belong to
+  Sultana (`frontend1`/`frontend2` STAGE, `frontend3`/`frontend4` DEV), so a
+  new site needs a free slot of its own — create one (`frontend5`, a 0.5 TC
+  create fee) or deploy to production. If this site does get a default slot,
+  this script is the one place that default lives.
 * `prod:deploy` is the production deploy.
 
 ### C. Test deploy
@@ -75,13 +78,14 @@ Add these three scripts to the web project's `package.json` (replace
 npm run craft:deploy
 ```
 
-The build lands in `~/motoko-crafting-table/frontend3` and is deployed to that
+The build lands in `~/motoko-crafting-table/<slot>` and is deployed to that
 slot's canister — open `https://<slot canister id>.icp0.io` (ids are in
 `~/motoko-crafting-table/canister_ids.json`). The slots are **shared between
 all projects** and every deploy is a reinstall: check what a slot holds
 (`~/motoko-crafting-table/<slot>/index.html`) before you take it, and expect
-your build to be replaced by the next project. `frontend3` has no custom
-domain, it is served only from its `.icp0.io` URL.
+your build to be replaced by the next project. A slot without a
+`<slot>-custom-domain/` folder in the crafting table has no custom domain and
+is served only from its `.icp0.io` URL.
 
 ### D. First production deploy
 

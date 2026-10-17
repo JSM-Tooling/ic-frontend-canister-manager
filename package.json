@@ -4,6 +4,9 @@
     "description": "",
     "license": "ISC",
     "author": "",
+    "config": {
+        "craftProject": ""
+    },
     "scripts": {
         "build": "echo 'Skipping build step...'",
         "dfx:icp-wallet-address": "dfx ledger account-id",
@@ -11,7 +14,7 @@
         "dfx:cycles-balance": "dfx cycles balance --ic",
         "dfx:convert-icp-to-cycles": "dfx cycles convert --ic --amount",
         "task:copy-to-crafting-table": "scripts/copy-to-crafting-table.sh",
-        "deploy:test": "f() { npm run task:copy-to-crafting-table -- $1 && cd ~/motoko-crafting-table && npm run deploy:$1; }; f",
+        "deploy:test": "f() { U='usage: deploy:test -- <slot> <repo> <commit>'; S=${1:?$U}; R=${2:?$U}; C=${3:?$U}; P=${npm_package_config_craftProject:?set config.craftProject in package.json to the product the crafting manager assigns slots to}; npm run task:copy-to-crafting-table -- $S && cd ~/motoko-crafting-table && npm run deploy:$S -- --project $P --repo $R --commit $C; }; f",
         "task:copy-files": "cp -r custom-domain-files/. dist/",
         "deploy:prod": "npm run task:copy-files && dfx deploy <CANISTER_NAME> --ic"
     }

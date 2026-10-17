@@ -13,7 +13,7 @@ build goes.
 ```
 web project                     manager                                        target
 ───────────                     ───────                                        ──────
-npm run build ──▶ dist/ ──copy──▶ ./dist ──┬─ deploy:test -- <slot> ──▶ ~/motoko-crafting-table/<slot> ──▶ shared test canister
+npm run build ──▶ dist/ ──copy──▶ ./dist ──┬─ deploy:test -- <slot> <repo> <commit> ──▶ ~/motoko-crafting-table/<slot> ──▶ shared test canister
                                            │                                                               (reinstall, .icp0.io URL)
                                            └─ deploy:prod ──▶ ./dist + custom-domain files ──▶ dfx deploy --ic ──▶ production canister
 ```
@@ -45,6 +45,7 @@ manager? Skip A and follow [Adding a site](#adding-a-site) instead.
    | Placeholder | Where | Value |
    |---|---|---|
    | `ic-frontend-canister-manager` | `package.json` → `name` | the repo name, e.g. `aaa-acme-frontend-manager` |
+   | `""` | `package.json` → `config.craftProject` | the **product** (project) whose crafting-table slots this manager deploys to, e.g. `acme` — the name the crafting manager assigns slots to. Required: `deploy:test` stops while it is empty |
    | `<CANISTER_NAME>` | `package.json`, `dfx.json`, `canister_ids.json` | the canister name, e.g. `acme_frontend` |
    | `<CANISTER_ID>` | `canister_ids.json` | the existing canister's id — or **delete the file** if the canister does not exist yet; the first `deploy:prod` creates it and writes the file |
    | `www.<YOUR-DOMAIN>.com` | `custom-domain-files/.well-known/ic-domains` | the site's domain(s), one per line |
@@ -58,18 +59,21 @@ Add these three scripts to the web project's `package.json` (replace
 
 ```json
 "copy": "rm -rf ../<aaa-client-frontend-manager>/dist && cp -r dist ../<aaa-client-frontend-manager>/dist",
-"craft:deploy": "f() { S=${1:?pass a crafting-table slot}; npm run build && npm run copy && cd ../<aaa-client-frontend-manager> && npm run deploy:test -- $S; }; f",
+"craft:deploy": "f() { S=${1:?pass a crafting-table slot}; C=$(git rev-parse --short HEAD)$(test -z \"$(git status --porcelain)\" || echo -dirty); npm run build && npm run copy && cd ../<aaa-client-frontend-manager> && npm run deploy:test -- $S <web-repo> $C; }; f",
 "prod:deploy": "npm run build && npm run copy && cd ../<aaa-client-frontend-manager> && npm run deploy:prod"
 ```
 
 * `copy` is the only place the web project touches the manager: it replaces
   the manager's `./dist` with the fresh build.
-* `craft:deploy` is the test deploy. The slot is **required**: since
-  2026-09-11 `frontend1`–`frontend4` in the crafting table all belong to
-  Sultana (`frontend1`/`frontend2` STAGE, `frontend3`/`frontend4` DEV), so a
-  new site needs a free slot of its own — create one (`frontend5`, a 0.5 TC
-  create fee) or deploy to production. If this site does get a default slot,
-  this script is the one place that default lives.
+* `craft:deploy` is the test deploy. The slot is **required**, and since
+  2026-10-17 the crafting table's `crafting-manager` decides who may deploy
+  into it: a slot must be assigned to this manager's product
+  (`config.craftProject`) on the manager's page, otherwise the deploy is
+  refused. `frontend1`–`frontend4` belong to Sultana. `<web-repo>` (the web
+  project's repo name) and the commit (`<short sha>`, `-dirty` for
+  uncommitted changes) are only recorded in the deploy history. If this
+  site does get a default slot, this script is the one place that default
+  lives.
 * `prod:deploy` is the production deploy.
 
 ### C. Test deploy
@@ -79,7 +83,8 @@ npm run craft:deploy -- <slot>
 ```
 
 The build lands in `~/motoko-crafting-table/<slot>` and is deployed to that
-slot's canister — open `https://<slot canister id>.icp0.io` (ids are in
+slot's canister (after the crafting manager confirms the slot is assigned to
+`config.craftProject`; the deploy is then recorded there) — open `https://<slot canister id>.icp0.io` (ids are in
 `~/motoko-crafting-table/canister_ids.json`). The slots are **shared between
 all projects** and every deploy is a reinstall: check what a slot holds
 (`~/motoko-crafting-table/<slot>/index.html`) before you take it, and expect
@@ -112,7 +117,7 @@ to the build so the domain keeps working after every deploy.
 
 | Script | What it does |
 |---|---|
-| `deploy:test -- <slot>` | `scripts/copy-to-crafting-table.sh <slot>` (copies `./dist` into `~/motoko-crafting-table/<slot>`, replacing it), then `npm run deploy:<slot>` in the crafting table. The slot is required and must be an `assets` canister in the table's `dfx.json`, otherwise the script stops before deleting anything. |
+| `deploy:test -- <slot> <repo> <commit>` | `scripts/copy-to-crafting-table.sh <slot>` (copies `./dist` into `~/motoko-crafting-table/<slot>`, replacing it), then `npm run deploy:<slot> -- --project <config.craftProject> --repo <repo> --commit <commit>` in the crafting table (it checks in crafting-manager that the slot is assigned to the product, deploys, records the deploy). All three arguments and `config.craftProject` are required; the slot must be an `assets` canister in the table's `dfx.json`, otherwise the script stops before deleting anything. |
 | `deploy:prod` | `task:copy-files` (custom-domain files into `./dist`), then `dfx deploy <CANISTER_NAME> --ic`. |
 | `task:copy-to-crafting-table -- <slot>` | the copy step of `deploy:test` alone. |
 | `task:copy-files` | the custom-domain copy step of `deploy:prod` alone. |
@@ -126,7 +131,7 @@ every deploy, never a source of truth.
 | Script | What it does |
 |---|---|
 | `copy` | replace the manager's `./dist` with this project's `dist`. |
-| `craft:deploy [-- <slot>]` | build, copy, manager `deploy:test -- <slot>`; default slot set in the script. |
+| `craft:deploy -- <slot>` | build, copy, manager `deploy:test -- <slot> <web-repo> <short sha>[-dirty]`. |
 | `prod:deploy` | build, copy, manager `deploy:prod` (or `<slug>:deploy:prod` in a multi-site manager). |
 
 ---
@@ -191,6 +196,7 @@ the slug form, switch `dfx.json` to `dist-<slug>`, and add
 
 ## Checklist before the first production deploy
 
+* `config.craftProject` set and a slot assigned to it in the crafting manager;
 * no `<…>` placeholder left in `package.json`, `dfx.json`,
   `canister_ids.json` (or the file deleted), `ic-domains`;
 * the manager sits next to the web project and the web project's scripts
